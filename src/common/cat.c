@@ -1,4 +1,4 @@
-void cat_command(int fd) {
+/*void cat_command(int fd) {
     printf("---- Cat Command ----\n\n");
 
     //Check if the file system is ext2 or fat16
@@ -91,4 +91,4 @@ void cat_ext2(fd) {
     }
 
     free(directory_entries);
-}
+}*/

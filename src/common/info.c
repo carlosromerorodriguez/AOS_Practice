@@ -1,4 +1,5 @@
 #include "info.h"
+#include "../ext2/ext2_reader.h"
 
 /*
  * @brief Print the information of a file system

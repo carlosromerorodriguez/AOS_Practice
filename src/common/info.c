@@ -33,11 +33,10 @@ void info_command(int fd) {
     }
 }
 
-
 void print_ext2_superblock(int fd) {
     Ext2Superblock superblock;
 
-    superblock.volume_name[15] = '\0'; // Asegurem que el volumen_name es una cadena de text finalizada en NULL
+    superblock.volume_name[0] = '\0'; // Asegurar que el nom del volum està finalitzat en NULL
     if (read_ext2_superblock(fd, &superblock) < 0) {
         perror("Error reading superblock");
         close(fd);
@@ -84,7 +83,6 @@ void print_time(const char *prefix, time_t timestamp) {
 
     printf("%s: %s\n", prefix, time_buffer);
 }
-
 /*
  * Print the boot sector information of a fat16 file system
  */

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 #define EXT2_SUPERBLOCK_OFFSET 1024
 #define EXT2_SUPERBLOCK_SIZE 1024

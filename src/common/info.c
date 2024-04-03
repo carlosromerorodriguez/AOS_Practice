@@ -25,10 +25,10 @@ void info_command(int fd) {
     if (is_ext2(fd)) {
         //Print the superblock information
         print_ext2_superblock(fd);
-    } else if (is_fat16()) {
+    } /*else if (is_fat16()) {
         //Print the boot sector information
         print_fat16_boot_sector();
-    } else {
+    }*/ else {
         printf("Invalid file system.\n");
     }
 }

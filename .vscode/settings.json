@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "fat16_reader.h": "c",
+        "string.h": "c",
+        "tree.h": "c",
+        "stdbool.h": "c",
+        "stdint.h": "c",
+        "ext2_reader.h": "c"
+    }
+}

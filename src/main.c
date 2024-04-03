@@ -1,3 +1,10 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include "common/tree.h"
 /* includes */
 
 int main(int argc, char *argv[]) {
@@ -15,11 +22,11 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "--info") == 0) {
         //TODO: Implement info command
-        
-
+        printFileInfo(argv[2]);
     } else if (strcmp(argv[1], "--tree") == 0) {
         //TODO: Implement tree command
-        
+        printFileTree(argv[2]);
+
     } else if (strcmp(argv[1], "--cat") == 0) {
         //TODO: Implement cat command
         

@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include "common/tree.h"
-/* includes */
+#include "common/info.h"
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
@@ -17,15 +17,15 @@ int main(int argc, char *argv[]) {
     int fd = open(argv[2], O_RDONLY);
     if (fd == -1) {
         perror("Error opening file");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (strcmp(argv[1], "--info") == 0) {
         //TODO: Implement info command
-        printFileInfo(argv[2]);
+        info_command(fd);
     } else if (strcmp(argv[1], "--tree") == 0) {
         //TODO: Implement tree command
-        printFileTree(argv[2]);
+        print_file_tree(fd);
 
     } else if (strcmp(argv[1], "--cat") == 0) {
         //TODO: Implement cat command
@@ -38,5 +38,5 @@ int main(int argc, char *argv[]) {
     }
 
     close(fd);
-    return 0;
+    return EXIT_SUCCESS;
 }

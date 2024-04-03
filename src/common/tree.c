@@ -1,38 +1,13 @@
 #include "tree.h"
 
-void printFileInfo(char filename[]) {
-    FILE *fileSystem = fopen(filename, "rb");
-    if (!fileSystem) {
-        perror("Error opening file");
-        return;
-    }
-    /*if (isExt2(filename)) {
-        printExt2FileTree(filename);
-    } else*/ if (isFat16(fileSystem)) {
-        BootSector bootSector;
-        readBootSector(filename, &bootSector);
-        printBootSector(&bootSector);
-    } else {
-        printf("Unknown file system\n");
-    }
-}
-
-void printFileTree(char filename[]) {
-    FILE *fileSystem = fopen(filename, "rb");
-    if (!fileSystem) {
-        perror("Error opening file");
-        return;
-    }
-
+void print_file_tree(int fd) {
     BootSector bootSector;
-    readBootSector(filename, &bootSector);
-    printBootSector(&bootSector);
+    read_boot_sector(fd, &bootSector);
+    print_boot_sector(&bootSector);
 
-    if (isFat16(fileSystem)) {
-        readRootDir(fileSystem, &bootSector, processDirEntry);
+    if (is_fat16(fd)) {
+        read_root_dir(fd, &bootSector, process_dir_entry);
     } else {
         printf("Unknown file system\n");
     }
-
-    fclose(fileSystem);
 }

@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
 // Estructura para el sector de arranque
 typedef struct {
@@ -48,10 +51,10 @@ typedef struct {
 } __attribute__((packed)) DirEntry;
 
 
-bool isFat16(FILE *file);
+bool is_fat16(int fd);
 
-void readBootSector(const char *filename, BootSector *bootSector);
+void read_boot_sector(int fd, BootSector *bootSector);
 
-void printBootSector(const BootSector *bootSector);
+void print_boot_sector(const BootSector *bootSector);
 
 #endif // !_FAT16_READER_H

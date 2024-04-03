@@ -1,22 +1,12 @@
 #include "info.h"
 #include "../ext2/ext2_reader.h"
+#include "../fat16/fat16_reader.h"
 
-/*
- * @brief Print the information of a file system
- * @param fd The file descriptor of the file system
- */
 void print_ext2_superblock(int fd);
-/*
- * @brief Print the time in a human readable format
- * @param prefix The prefix to print before the time
- * @param timestamp The timestamp to print
- */
-void print_time(const char *prefix, time_t timestamp);
-/*
- * @brief Print the boot sector information of a fat16 file system
- */
-void print_fat16_boot_sector();
 
+void print_fat16_boot_sector(int fd);
+
+void print_time(const char *prefix, time_t timestamp);
 
 void info_command(int fd) {
     printf("---- Filesystem Information ----\n\n");
@@ -25,10 +15,10 @@ void info_command(int fd) {
     if (is_ext2(fd)) {
         //Print the superblock information
         print_ext2_superblock(fd);
-    } /*else if (is_fat16()) {
+    } else if (is_fat16(fd)) {
         //Print the boot sector information
-        print_fat16_boot_sector();
-    }*/ else {
+        print_fat16_boot_sector(fd);
+    } else {
         printf("Invalid file system.\n");
     }
 }
@@ -86,7 +76,9 @@ void print_time(const char *prefix, time_t timestamp) {
 /*
  * Print the boot sector information of a fat16 file system
  */
-void print_fat16_boot_sector() {
-
+void print_fat16_boot_sector(int fd) {
+    BootSector bootSector;
+    read_boot_sector(fd, &bootSector);
+    print_boot_sector(&bootSector);
 }
 

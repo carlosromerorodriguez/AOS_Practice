@@ -1,7 +1,6 @@
 #ifndef _TREE_H
 #define _TREE_H
 
-#include "../ext2/ext2_reader.h"
 #include "../fat16/fat16_reader.h"
 
 void print_file_tree(int fd);

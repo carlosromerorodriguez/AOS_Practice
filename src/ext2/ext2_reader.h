@@ -1,8 +1,12 @@
-#include <stdio.h>
-#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define EXT2_SUPERBLOCK_OFFSET 1024
 #define EXT2_SUPERBLOCK_SIZE 1024
@@ -85,13 +89,11 @@ typedef struct
 Ext2Inode;
 #pragma pack(pop)
 
-
-
 #pragma pack(push, 1)  
 typedef struct 
 {
         uint32_t inode;
-        uint16_t size;
+        uint16_t rec_len;
         uint8_t name_len;
         uint8_t file_type;
         char name[];
@@ -99,5 +101,24 @@ typedef struct
 Ext2DirectoryEntry;
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+typedef struct 
+{
+    uint32_t block_bitmap;
+    uint32_t inode_bitmap;
+    uint32_t inode_table;
+    uint16_t free_blocks_count;
+    uint16_t free_inodes_count;
+    uint16_t used_dirs_count;
+    uint16_t pad;
+    uint32_t reserved[3];
+} 
+Ext2GroupDesc;
+#pragma pack(pop)
+
 int is_ext2(int fd);
 int read_ext2_superblock(int fd, Ext2Superblock *superblock);
+int read_ext2_group_desc(int fd, Ext2Superblock *superblock, uint32_t group_num, Ext2GroupDesc *group_desc);
+int read_ext2_inode(int fd, Ext2Superblock *superblock, uint32_t inode_num, Ext2Inode *inode);
+int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ext2DirectoryEntry *entries);
+void cat_ext2_file(int fd, Ext2Inode *inode, uint32_t block_size);

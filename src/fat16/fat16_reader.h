@@ -57,4 +57,6 @@ void read_boot_sector(int fd, BootSector *bootSector);
 
 void print_boot_sector(const BootSector *bootSector);
 
+void process_dir_entry(DirEntry *entry, int level);
+
 #endif // !_FAT16_READER_H

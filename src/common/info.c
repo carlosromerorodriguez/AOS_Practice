@@ -33,6 +33,21 @@ void print_ext2_superblock(int fd) {
         return;
     }
 
+    char volume_name[17]; // 16 caracteres + 1 para el terminador nulo
+    volume_name[16] = '\0'; // Asegura que la cadena esté terminada en NULL
+
+    if (lseek(fd, 1024 + 120, SEEK_SET) < 0) { // Moverse al offset donde comienza el nombre del volumen dentro del superbloque
+        perror("Error seeking to volume name");
+        close(fd);
+        return;
+    }
+
+    if (read(fd, volume_name, 16) < 0) { // Leer los 16 bytes del nombre del volumen
+        perror("Error reading volume name");
+        close(fd);
+        return;
+    }
+
     /* Com que EXT2 permet diferents mides de blocs hem d'aplicar la formula: 1024 << log_block_size
      * La mida base del bloc és 1024 bytes, per tant, per calcular la mida del bloc
      * hem de fer 1024 << log_block_size, on log_block_size és el camp de la superblock
@@ -56,7 +71,7 @@ void print_ext2_superblock(int fd) {
     printf("Frags per Group: %u\n\n", superblock.frags_per_group);
 
     printf("VOLUME INFO\n");
-    printf("Volume Name: %s\n", superblock.volume_name); // Asumim que volume_name és una cadena de text finalitzada en NULL
+    printf("Volume Name: %s\n", volume_name); // Asumim que volume_name és una cadena de text finalitzada en NULL
     print_time("Last Checked:", superblock.last_check);
     print_time("Last Mounted:", superblock.last_mount_time);
     print_time("Last Written:", superblock.last_written_time);

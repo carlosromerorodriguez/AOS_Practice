@@ -11,16 +11,13 @@
 bool is_fat16(int fd) {
     char type_fat16[FAT16_LENGTH + 1];  // + 1 -> '\0'
 
-    // lseek para mover el offset al lugar correcto
     if (lseek(fd, FAT16_OFFSET, SEEK_SET) == (off_t)-1) {
         perror("Error seeking in file");
         return false;
     }
 
-    // read para leer los datos del archivo
     ssize_t bytes_read = read(fd, type_fat16, FAT16_LENGTH);
     if (bytes_read < FAT16_LENGTH) {
-        // Error de lectura o no hay suficientes bytes (puede ser el final del archivo)
         return false;
     }
 
@@ -39,7 +36,6 @@ void read_boot_sector(int fd, BootSector *bootSector) {
         exit(EXIT_FAILURE);
     }
 
-    // Leer el sector de arranque usando read en lugar de fread
     if (read(fd, bootSector, sizeof(BootSector)) != sizeof(BootSector)) {
         perror("Error reading boot sector");
         exit(EXIT_FAILURE);
@@ -64,38 +60,44 @@ unsigned int root_dir_address(const BootSector *bootSector) {
     return (bootSector->reserved_sectors + bootSector->number_of_fats * bootSector->fat_size_sectors) * bootSector->sector_size;
 }
 
-// Función para leer las entradas del directorio raíz
-void read_root_dir(int fd, const BootSector *bootSector, void (*processEntry)(const DirEntry*, int)) {
+// Función para imprimir un directorio y su contenido recursivamente
+void print_directory(int fd, const BootSector *bootSector, int level, void (*processEntry)(DirEntry*, int)) {
     unsigned int address = root_dir_address(bootSector);
-    if (lseek(fd, address, SEEK_SET) == (off_t)-1) {
-        perror("Error seeking to root directory");
-        exit(EXIT_FAILURE);
-    }
+    lseek(fd, address, SEEK_SET);  // Mover el fd al inicio del directorio 'root'
 
     DirEntry dir;
     for (int i = 0; i < bootSector->root_dir_entries; i++) {
         ssize_t bytes_read = read(fd, &dir, sizeof(DirEntry));
-        if (bytes_read < 0) {
-            perror("Error reading directory entry");
-            exit(EXIT_FAILURE);
+        if (bytes_read < (ssize_t)sizeof(DirEntry)) {
+            break; // Error de lectura o final del directorio
         }
-        if (bytes_read == 0 || dir.filename[0] == 0x00) {
+
+        if (dir.filename[0] == 0x00) {
             break; // Final de las entradas del directorio
         }
+
         if (dir.filename[0] == 0xE5) {
             continue; // Entrada de directorio borrada
         }
-        processEntry(&dir, 0); // Procesa cada entrada del directorio
+
+        processEntry(&dir, level);
     }
 }
 
-// Procesa cada entrada de directorio
-void process_dir_entry(const DirEntry *entry, int level) {
-    if (entry->attributes & ATTR_DIRECTORY) {
-        // Es un directorio
-        printf("%*s[%s]\n", level * 2, "", entry->filename);
-    } else {
-        // Es un archivo
-        printf("%*s%s\n", level * 2, "", entry->filename);
+void process_dir_entry(DirEntry *entry, int level) {  
+    if (strlen((const char *)entry->filename) <= 2) {
+        return;
     }
+
+    // Convertir el nombre y la extensión del archivo a una cadena completa
+    char fullname[13];
+    snprintf(fullname, sizeof(fullname), "%s.%s", entry->filename, entry->ext);
+
+    // Eliminar espacios de relleno del nombre del archivo y la extensión
+    char *end = fullname + strlen(fullname);
+    while (end > fullname && end[-1] == ' ') --end;
+    *end = '\0';
+
+    // Imprimir la entrada con la indentación basada en el nivel de profundidad
+    printf("%*s%s\n", level * 4, "", entry->filename);  // Se usan 4 espacios por nivel de profundidad
 }

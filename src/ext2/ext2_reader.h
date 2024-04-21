@@ -99,7 +99,6 @@ typedef struct
 {
         uint32_t inode;
         uint16_t rec_len;
-        uint16_t rec_len;
         uint8_t name_len;
         uint8_t file_type;
         char name[];

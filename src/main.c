@@ -15,9 +15,6 @@ int main(int argc, char *argv[]) {
     {
         printf("Invalid number of arguments\n");
         return EXIT_FAILURE;
-    if (argc != 4) {
-        printf("Wrong number of arguments.\n");
-        return 1;
     }
 
     // Open the file system image file
@@ -45,13 +42,6 @@ int main(int argc, char *argv[]) {
     } 
     else 
     {
-    } else if (strcmp(argv[1], "--cat") == 0) {
-        //TODO: Implement cat command
-        char* fileName = argv[3];
-        fileName = strcat(fileName, "\0");
-        cat_command(fd, fileName);
-
-    } else {
         printf("Invalid command.\n");
         close(fd);
         return 1;

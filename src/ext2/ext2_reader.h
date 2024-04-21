@@ -1,7 +1,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <stdint.h>
 #include <time.h>
 #include <string.h>
@@ -92,6 +98,7 @@ Ext2Inode;
 typedef struct 
 {
         uint32_t inode;
+        uint16_t rec_len;
         uint16_t rec_len;
         uint8_t name_len;
         uint8_t file_type;

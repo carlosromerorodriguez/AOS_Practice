@@ -5,6 +5,7 @@
         "tree.h": "c",
         "stdbool.h": "c",
         "stdint.h": "c",
-        "ext2_reader.h": "c"
+        "ext2_reader.h": "c",
+        "cat.h": "c"
     }
 }

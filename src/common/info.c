@@ -2,12 +2,20 @@
 #include "../ext2/ext2_reader.h"
 #include "../fat16/fat16_reader.h"
 
+// Function prototypes
 void print_ext2_superblock(int fd);
 
 void print_fat16_boot_sector(int fd);
 
 void print_time(const char *prefix, time_t timestamp);
 
+/**
+ * Checks the file system type and prints the information of the file system
+ * 
+ * @param fd File descriptor of the file system.
+ * 
+ * @return void
+*/
 void info_command(int fd) {
     printf("---- Filesystem Information ----\n\n");
 
@@ -23,6 +31,13 @@ void info_command(int fd) {
     }
 }
 
+/**
+ * Prints the superblock information of an ext2 file system
+ * 
+ * @param fd File descriptor of the file system.
+ * 
+ * @return void
+*/
 void print_ext2_superblock(int fd) {
     Ext2Superblock superblock;
 
@@ -79,6 +94,14 @@ void print_ext2_superblock(int fd) {
     return; 
 }
 
+/**
+ * Prints the time in a human-readable format
+ * 
+ * @param prefix Prefix to print before the time
+ * @param timestamp Timestamp to print
+ * 
+ * @return void
+*/
 void print_time(const char *prefix, time_t timestamp) {
     struct tm *time_info;
     char time_buffer[80];
@@ -88,12 +111,15 @@ void print_time(const char *prefix, time_t timestamp) {
 
     printf("%s: %s\n", prefix, time_buffer);
 }
-/*
- * Print the boot sector information of a fat16 file system
- */
+/**
+ * Prints the boot sector information of a FAT16 file system
+ * 
+ * @param fd File descriptor of the file system.
+ * 
+ * @return void
+*/
 void print_fat16_boot_sector(int fd) {
     BootSector bootSector;
     read_boot_sector(fd, &bootSector);
     print_boot_sector(&bootSector);
 }
-

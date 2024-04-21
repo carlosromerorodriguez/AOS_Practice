@@ -1,8 +1,12 @@
-#include <stdio.h>
-#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define EXT2_SUPERBLOCK_OFFSET 1024
 #define EXT2_SUPERBLOCK_SIZE 1024
@@ -59,7 +63,6 @@ typedef struct {
 } Ext2Superblock;
 #pragma pack(pop)
 
-
 #pragma pack(push, 1)
 typedef struct 
 {
@@ -85,13 +88,11 @@ typedef struct
 Ext2Inode;
 #pragma pack(pop)
 
-
-
 #pragma pack(push, 1)  
 typedef struct 
 {
         uint32_t inode;
-        uint16_t size;
+        uint16_t rec_len;
         uint8_t name_len;
         uint8_t file_type;
         char name[];
@@ -99,5 +100,68 @@ typedef struct
 Ext2DirectoryEntry;
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+typedef struct 
+{
+    uint32_t block_bitmap;
+    uint32_t inode_bitmap;
+    uint32_t inode_table;
+    uint16_t free_blocks_count;
+    uint16_t free_inodes_count;
+    uint16_t used_dirs_count;
+    uint16_t pad;
+    uint32_t reserved[3];
+} 
+Ext2GroupDesc;
+#pragma pack(pop)
+
+/**
+ * @brief Checks if the file system is an EXT2 file system.
+ * 
+ * @param fd File descriptor of the file system.
+ * 
+ * @return 1 if the file system is EXT2, 0 otherwise.
+*/
 int is_ext2(int fd);
+
+/*
+ * @brief Reads the superblock of an EXT2 file system.
+ * @param fd File descriptor of the EXT2 file system.
+ * @param superblock Pointer to the superblock structure to fill.
+ */
 int read_ext2_superblock(int fd, Ext2Superblock *superblock);
+
+/*
+    * @brief Reads a group descriptor from the block group descriptor table.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param group_num Number of the group descriptor to read.
+    * @param group_desc Pointer to the group descriptor structure to fill.
+ */
+int read_ext2_group_desc(int fd, Ext2Superblock *superblock, uint32_t group_num, Ext2GroupDesc *group_desc);
+
+/*
+    * @brief Reads an inode from the inode table.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param inode_num Number of the inode to read.
+    * @param inode Pointer to the inode structure to fill.
+ */
+int read_ext2_inode(int fd, Ext2Superblock *superblock, uint32_t inode_num, Ext2Inode *inode);
+
+/*
+    * @brief Reads a directory from the inode.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param inode Inode of the directory to read.
+    * @param entries Pointer to the directory entries structure to fill.
+ */
+int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ext2DirectoryEntry *entries);
+
+/*
+    * @brief Displays the contents of a file.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param inode Inode of the file to display.
+    * @param block_size Size of the blocks in the file system.
+ */
+void cat_ext2_file(int fd, Ext2Inode *inode, uint32_t block_size);

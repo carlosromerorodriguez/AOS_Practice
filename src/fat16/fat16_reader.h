@@ -40,23 +40,76 @@ typedef struct {
 
 // Estructura para una entrada de directorio
 typedef struct {
-    unsigned char filename[8];
+    char filename[8];
     char ext[3];
-    uint8_t attributes;
-    uint8_t reserved[10];
-    uint16_t modify_time;
-    uint16_t modify_date;
-    uint16_t starting_cluster;
-    uint32_t file_size;
+    char attributes;
+    char reservedNT;
+    char creationTimeTenth;
+    unsigned short createTime;
+    unsigned short createDate;
+    unsigned short accessDate;
+    unsigned short reservedFAT32;
+    unsigned short writeTime;
+    unsigned short writeDate;
+    unsigned short startCluster;
+    unsigned int fileSize;
 } __attribute__((packed)) DirEntry;
 
-
+/**
+ * Checks if the file system is FAT16 by reading the boot sector.
+ * 
+ * @param fd File descriptor of the file system.
+ * 
+ * @return true if the file system is FAT16, false otherwise.
+*/
 bool is_fat16(int fd);
 
+/**
+ * Reads the boot sector of the file system. 
+ * 
+ * @param fd File descriptor of the file system.
+ * @param bootSector Pointer to the boot sector structure to store the boot sector information.
+ * 
+ * @return void
+*/
 void read_boot_sector(int fd, BootSector *bootSector);
 
+/**
+ * Prints the boot sector information.
+ * 
+ * @param bootSector Pointer to the boot sector structure.
+ * 
+ * @return void
+*/
 void print_boot_sector(const BootSector *bootSector);
 
-void process_dir_entry(DirEntry *entry, int level);
+/**
+ * Hets the root directory offset of the file system.
+ * 
+ * @param bootSector Boot sector of the file system.
+ * 
+ * @return the root directory offset of the file system.
+*/
+int get_root_dir_offset(BootSector bootSector);
+
+/**
+ * Gets the first cluster of the file.
+ * 
+ * @param bootSector Boot sector of the file system.
+ * 
+ * @return the first cluster of the file.
+*/
+unsigned int get_first_cluster(const BootSector bootSector);
+
+/**
+ * Gets the next cluster of the file. 
+ * 
+ * @param fd File descriptor of the file system.
+ * @param current_cluster Current cluster of the file.
+ * @param bootSector Boot sector of the file system.
+ * 
+ * @return the next cluster of the file.
+*/
+unsigned int get_next_cluster(int fd, unsigned int cluster, const BootSector bootSector);
 
 #endif // !_FAT16_READER_H

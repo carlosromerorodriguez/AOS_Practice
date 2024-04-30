@@ -175,13 +175,80 @@ int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ex
         }
 
         // Llegim un bloc sencer de dades del fitxer, fem serivr entrada + i * block_size per llegir el bloc sencer ja que la mida del bloc es de block_size i li sumem i * block_size per llegir el següent bloc
-        if (read(fd, entries + i * block_size, block_size) != block_size) {
+        if (read(fd, ((char*)entries) + i * block_size, block_size) != block_size) {
             perror("Error reading block");
             return -1;
         }
     }
 
     return 0;
+}
+
+/*
+    * @brief Prints a line of the tree representation of the directory structure.
+    * @param level Level of the tree where the line will be printed.
+    * @param name Name of the entry to print.
+    * @param is_last_entry Flag indicating if the entry is the last one in the directory.
+ */
+void print_tree_line(int level, const char* name, int is_last_entry) {
+    static int levels[100] = {0}; // Array per rastrejar els nivells actius
+    
+    for (int i = 0; i < level; ++i) {
+        printf("%s", levels[i] ? "│   " : "    ");
+    }
+
+    printf("%s── %s\n", is_last_entry ? "└" : "├", name);
+
+    levels[level] = !is_last_entry; // Establim el nivell actual com a actiu o no
+    
+}
+
+/*
+    * @brief Performs a depth-first search of the EXT2 file system.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param inode_num Number of the inode to start the search from.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param level Level of the tree where the search is currently at.
+ */
+void dfs_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, int level, uint32_t current_inode, uint32_t parent_inode) {
+    Ext2Inode inode; // Ínode actual en el que estem
+    Ext2DirectoryEntry *entries; // Entrades del directori
+    // Mida del bloc, shiftem 1024 a l'esquerra per obtenir la mida del bloc ja que el superblock ens dona la mida del bloc en potencies de 2
+    uint32_t block_size = 1024 << superblock->log_block_size; 
+
+    // LLegim l'ínode
+    read_ext2_inode(fd, superblock, inode_num, &inode);
+    uint32_t num_blocks = (inode.size + block_size - 1) / block_size;
+    
+    // Comprovem si l'ínode és un directori
+    if (inode.mode & 0x4000) { 
+        // Llegim les entrades del directori
+        entries = (Ext2DirectoryEntry *) malloc(num_blocks * block_size);
+        read_ext2_directory(fd, superblock, &inode, entries); // Llegim les entrades del directori
+
+        // Per cada entrada del directori
+        for (uint32_t offset = 0; offset < block_size; ) {
+            Ext2DirectoryEntry *entry = (Ext2DirectoryEntry *)((char *)entries + offset);
+            if (entry->inode != 0) { // Si l'entrada no és buida
+                // Mostrem el nom de l'entrada
+
+                uint32_t next_offset = offset + entry->rec_len;
+                uint32_t is_current_last_entry = (next_offset >= block_size) || (((Ext2DirectoryEntry *)((char *)entries + next_offset))->inode == 0);
+
+                if (strcmp(entry->name, ".") != 0 && strcmp(entry->name, "..") != 0 && strcmp(entry->name, "lost+found") != 0) {
+                    print_tree_line(level, entry->name, is_current_last_entry);
+                }
+
+                // Explorem recursivament si és un directori i no és '.' ni '..'
+                if (entry->file_type == 2 && entry->inode != current_inode && entry->inode != parent_inode) {
+                    dfs_ext2(fd, entry->inode, superblock, level + 1, entry->inode, current_inode);
+                }
+            }
+            offset += entry->rec_len; // Ens movem a la següent entrada
+        }
+
+        free(entries); // Alliberem la memòria de les entrades
+    }
 }
 
 /*
@@ -217,5 +284,55 @@ void cat_ext2_file(int fd, Ext2Inode *inode, uint32_t block_size) {
 
         // Escrivim els bytes llegits
         printf("%.*s", (int)bytes_read, buffer);
+    }
+}
+
+
+/*
+    * @brief Displays the contents of a file.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param inode_num Number of the inode to display.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param filename Name of the file to display.
+ */
+void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode) {
+    Ext2Inode inode; // Ínode actual en el que estem
+    Ext2DirectoryEntry *entries; // Entrades del directori
+    // Mida del bloc, shiftem 1024 a l'esquerra per obtenir la mida del bloc ja que el superblock ens dona la mida del bloc en potencies de 2
+    uint32_t block_size = 1024 << superblock->log_block_size; 
+
+    // LLegim l'ínode
+    read_ext2_inode(fd, superblock, inode_num, &inode);
+    uint32_t num_blocks = (inode.size + block_size - 1) / block_size;
+
+    // Comprovem si l'ínode és un directori
+    if (inode.mode & 0x4000) { 
+        // Llegim les entrades del directori
+        entries = (Ext2DirectoryEntry *) malloc(num_blocks * block_size); // Reservem memòria per les entrades
+        read_ext2_directory(fd, superblock, &inode, entries); // Llegim les entrades del directori
+
+        // Per cada entrada del directori
+        for (uint32_t offset = 0; offset < block_size; ) {
+            Ext2DirectoryEntry *entry = (Ext2DirectoryEntry *)((char *)entries + offset);
+            if (entry->inode != 0) { // Si l'entrada no és buida
+                char entry_name[entry->name_len + 1];
+                memcpy(entry_name, entry->name, entry->name_len);
+                entry_name[entry->name_len] = '\0';
+
+                if(strcmp(entry_name, filename) == 0){
+                    Ext2Inode file_inode; // Inode del fitxer
+                    read_ext2_inode(fd, superblock, entry->inode, &file_inode); // Llegim l'ínode del fitxer
+                    cat_ext2_file(fd, &file_inode, block_size); // Mostrem el contingut del fitxer
+                }
+
+                // Explorem recursivament si és un directori i no és el directori actual ni el directori pare
+                if (entry->file_type == 2 && entry->inode != current_inode && entry->inode != parent_inode) {
+                    cat_ext2(fd, entry->inode, superblock, filename, entry->inode, current_inode);
+                }
+            }
+            offset += entry->rec_len; // Ens movem a la següent entrada
+        }
+
+        free(entries); // Alliberem la memòria de les entrades
     }
 }

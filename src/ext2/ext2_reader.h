@@ -167,7 +167,18 @@ int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ex
 /*
     * @brief Displays the contents of a file.
     * @param fd File descriptor of the EXT2 file system.
-    * @param inode Inode of the file to display.
-    * @param block_size Size of the blocks in the file system.
+    * @param inode_num Number of the inode to display.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param filename Name of the file to display.
  */
-void cat_ext2_file(int fd, Ext2Inode *inode, uint32_t block_size);
+void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode);
+
+
+/*
+    * @brief shows the tree representation of the directory structure of the file system.
+    * @param fd File descriptor of the EXT2 file system.
+    * @param inode_num Inode number of the directory to display.
+    * @param superblock Superblock of the EXT2 file system.
+    * @param level Level of the directory in the tree.
+ */
+void dfs_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, int level, uint32_t current_inode, uint32_t parent_inode);

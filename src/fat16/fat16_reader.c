@@ -1,26 +1,30 @@
 #include "fat16_reader.h"
 
+void fat16_recursion_tree_helper(int fd, BootSector bs, int current_sector, int depth, int wasLast, int tree_not_cat, char *file_name);
+void print_directory_tree_entry(unsigned char entry_filename[], int depth, int is_last_entry, int prev_last_entry, int is_directory);
+uint32_t calculate_root_dir_sectors(BootSector bpb);
+void get_filename_processed(unsigned char entry_filename[], char filename[], int is_directory);
+void print_directory_cat_entry(int fd, DirEntry entry, BootSector bs);
+
 /**
  * Checks if the file system is FAT16 by reading the boot sector.
  * 
  * @param fd File descriptor of the file system.
  * 
- * @return true if the file system is FAT16, false otherwise.
+ * @return 1 if the file system is FAT16, 0 otherwise.
 */
-bool is_fat16(int fd) {
-    BootSector bs;
-    if (lseek(fd, 0, SEEK_SET) == (off_t)-1 || read(fd, &bs, sizeof(BootSector)) != sizeof(BootSector)) {
-        perror("Error reading boot sector");
-        return false;
-    }
+int is_fat16(int fd) {
+    BootSector bpb;
+    read_boot_sector(fd, &bpb);
 
-    uint32_t total_sectors = bs.total_sectors_short != 0 ? bs.total_sectors_short : bs.total_sectors_long;
-    uint32_t fat_size = bs.fat_size_sectors != 0 ? bs.fat_size_sectors : bs.total_sectors_long;
-    uint32_t root_dir_sectors = ((bs.root_dir_entries * 32) + (bs.sector_size - 1)) / bs.sector_size;
-    uint32_t data_sectors = total_sectors - (bs.reserved_sectors + (bs.number_of_fats * fat_size) + root_dir_sectors);
-    uint32_t total_clusters = data_sectors / bs.sectors_per_cluster;
+    // Determine the count of sectors in the data region of the volume
+    uint32_t fat_size = bpb.fat_size_16 != 0 ? bpb.fat_size_16 : bpb.total_sectors_32;
+    uint32_t total_sectors = bpb.total_sectors_16 != 0 ? bpb.total_sectors_16 : bpb.total_sectors_32;
+    uint32_t root_dir_sectors = calculate_root_dir_sectors(bpb);
+    uint32_t data_sectors = total_sectors - (bpb.reserved_sectors + (bpb.number_of_fats * fat_size) + root_dir_sectors);
+    uint32_t count_of_clusters = data_sectors / bpb.sectors_per_cluster;
 
-    return total_clusters >= 4086 && total_clusters < 65526;    
+    return count_of_clusters >= 4085 && count_of_clusters < 65525;    
 }
 
 /**
@@ -58,108 +62,62 @@ void print_boot_sector(const BootSector *bootSector) {
     printf("Reserved Sectors: %u\n", bootSector->reserved_sectors);
     printf("# of FATs: %u\n", bootSector->number_of_fats);
     printf("Max root entries: %u\n", bootSector->root_dir_entries);
-    printf("Sector per FAT: %u\n", bootSector->fat_size_sectors);
+    printf("Sectors per FAT: %u\n", bootSector->fat_size_16);
     printf("Label: %.11s\n", bootSector->volume_label);
 }
 
-/**
- * Hets the root directory offset of the file system.
- * 
- * @param bootSector Boot sector of the file system.
- * 
- * @return the root directory offset of the file system.
-*/
-int get_root_dir_offset(BootSector bootSector) {
-    return (bootSector.reserved_sectors * bootSector.sector_size) + (bootSector.number_of_fats * bootSector.fat_size_sectors) * bootSector.sector_size;
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                                       //
+// FASE 2 FUNCTIONS                                                                                                      //
+//                                                                                                                       //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+uint32_t calculate_root_dir_sectors(BootSector bpb) 
+{
+    return ((bpb.root_dir_entries * 32) + (bpb.sector_size - 1)) / bpb.sector_size;
 }
 
-/**
- * Gets the next cluster of the file. 
- * 
- * @param fd File descriptor of the file system.
- * @param current_cluster Current cluster of the file.
- * @param bootSector Boot sector of the file system.
- * 
- * @return the next cluster of the file.
-*/
-unsigned int get_next_cluster(int fd, unsigned int current_cluster, const BootSector bootSector) {
-    unsigned int fat_offset = bootSector.reserved_sectors * bootSector.sector_size + current_cluster * 2;
-    uint16_t next_cluster;
-    lseek(fd, fat_offset, SEEK_SET);
-    read(fd, &next_cluster, sizeof(next_cluster));
-
-    if (next_cluster >= 0xFFF8) { // Final de la cadena de clústeres
-        return 0xFFFF;
-    }
-    return next_cluster;
+uint32_t calculate_first_root_dir_sector_number(BootSector bpb) 
+{
+    return bpb.reserved_sectors + (bpb.number_of_fats * bpb.fat_size_16);
 }
 
-
-/**
- * Gets the first cluster of the file.
- * 
- * @param bootSector Boot sector of the file system.
- * 
- * @return the first cluster of the file.
-*/
-unsigned int get_first_cluster(const BootSector bootSector) {
-     return get_root_dir_offset(bootSector) + bootSector.root_dir_entries * sizeof(DirEntry);
+uint32_t calculate_first_data_sector(BootSector bpb, uint32_t root_dir_sectors) 
+{
+    return calculate_first_root_dir_sector_number(bpb) + root_dir_sectors;
 }
 
-/**
- * Reads a directory entry from the file system.
- * 
- * @param fd File descriptor of the file system.
- * @param offset Offset of the directory entry.
- * 
- * @return the directory entry.
-*/
-DirEntry read_directory_entry(int fd, int offset) {
-    DirEntry entry;
-    if (lseek(fd, offset, SEEK_SET) < 0) {
-        perror("Error seeking to directory entry");
-        exit(EXIT_FAILURE);
-    }
+uint32_t calculate_first_sector_of_cluster(DirEntry entry, uint32_t root_dir_sectors, BootSector bs) 
+{
+  uint16_t n = entry.startCluster;
+  uint32_t first_sector_of_cluster = (n - 2) * bs.sectors_per_cluster +  calculate_first_data_sector(bs, root_dir_sectors);;
 
-    if (read(fd, &entry, sizeof(DirEntry)) != sizeof(DirEntry)) {
-        perror("Error reading directory entry");
-        exit(EXIT_FAILURE);
-    }
-
-    return entry;
+  return first_sector_of_cluster;
 }
 
-/**
- * Checks if the directory entry is a directory.
- * 
- * @param entry Directory entry to check.
- * 
- * @return 1 if the directory entry is a directory, 0 otherwise.
-*/
-unsigned char it_is_a_directory(DirEntry entry) {
-    if (entry.filename[0] == '.' &&
-        (entry.filename[1] == ' ' || entry.filename[1] == '\0' || entry.filename[1] == '.')) {
-        return 0;
-    }
-
-    return entry.attributes == 0x10;
+off_t calculate_dir_entry_offset(uint32_t current_sector, uint16_t idx, const BootSector bs) 
+{
+    return current_sector * bs.sector_size + idx * sizeof(DirEntry);
 }
 
-/**
- * Removes the characters from the filename until the character c is found.
- * 
- * @param filename Filename to remove the characters.
- * @param c Character to find.
- * 
- * @return void
-*/
-void remove_until_char(char *filename, char c) {
-    for (int i = 0; i < 8; i++) {
-        if (filename[i] == c) {
-            filename[i] = '\0';
-            break;
+int is_last_active_entry(int fd, uint32_t current_sector, uint16_t idx, BootSector bs) 
+{
+    off_t start_offset = calculate_dir_entry_offset(current_sector, idx + 1, bs);
+    DirEntry next_entry;
+
+    for (uint16_t i = idx + 1; i < bs.sector_size / sizeof(DirEntry); i++, start_offset += sizeof(DirEntry)) {
+        if (lseek(fd, start_offset, SEEK_SET) == -1 || read(fd, &next_entry, sizeof(DirEntry)) != sizeof(DirEntry)) {
+            perror("Error reading directory entry");
+            exit(EXIT_FAILURE);
+        }
+        
+        // Si se encuentra otra entrada válida, no es la última
+        if (next_entry.filename[0] != DIR_ENTRY_FREE && next_entry.filename[0] != DIR_ENTRY_EMPTY) {
+            return 0; 
         }
     }
+
+    return 1; 
 }
 
 /**
@@ -174,103 +132,124 @@ void remove_until_char(char *filename, char c) {
  * 
  * @return the directory entry of the file.
 */
-DirEntry fat16_recursion_tree(int fd, const BootSector bootSector, int offset, int depth, int tree_not_cat, char *filename_to_find) {
-    int new_offset;
+void fat16_recursion_tree(int fd, const BootSector bpb, int tree_not_cat, char *filename_to_find) 
+{
+    int first_root_dir_sector_number = calculate_first_root_dir_sector_number(bpb);
+    uint32_t root_dir_sectors = calculate_root_dir_sectors(bpb);
+    
+    for (uint32_t i = 0; i < root_dir_sectors; i++) {
+        fat16_recursion_tree_helper(fd, bpb, first_root_dir_sector_number + i, 0, 0, tree_not_cat, filename_to_find);
+    }
+}
+
+void fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int lvl, int prev_last_entry, int tree_not_cat, char *file_name) 
+{
+  uint32_t root_dir_sectors = calculate_root_dir_sectors(bpb);
+
+  for (size_t i = 0; i < (bpb.sector_size / sizeof(DirEntry)); i++) 
+  {
     DirEntry entry;
-    char fullname[14];
-    char indent[10] = {0};
+    off_t offset = calculate_dir_entry_offset(current_sector, i, bpb);
 
-    for (int i = 0; i < depth; i++) {
-        strcat(indent, "│  ");
+    lseek(fd, offset, SEEK_SET);
+    read(fd, &entry, sizeof(DirEntry));
+
+    // skip "." + ".." + "deleted" / "empty" entries
+    if (entry.filename[0] == CURRENT_DIR_ENTRY || entry.filename[0] == DIR_ENTRY_FREE || entry.filename[0] == DIR_ENTRY_EMPTY) {
+        continue;
     }
-
-    for (int i = 0; i < bootSector.root_dir_entries; i++) {
-        lseek(fd, offset, SEEK_SET);
-        entry = read_directory_entry(fd, offset);
-        offset += sizeof(DirEntry);
-
-        // Se salta el nombre del directorio raiz
-        if (i == 0) {
-            continue;
+    
+    int is_last_entry = is_last_active_entry(fd, current_sector, i, bpb);
+    if (entry.attributes == ATTR_DIRECTORY) 
+    {
+        if (tree_not_cat) {
+            print_directory_tree_entry(entry.filename, lvl, is_last_entry, prev_last_entry, 1);
         }
-
-        if (entry.attributes == 0x0) {
-            break;
-        }
-
-        // Si la entrada del directorio habia sido eliminada previamente o es un archivo de sistema, se ignora
-        if (entry.attributes == 0xF || entry.filename[0] == (char)229) {
-            continue;
-        }    
-
-        if (entry.filename[0] == '.' || (strlen(entry.filename) == 2 && (entry.filename[0] == '.' && entry.filename[1] == '.')) || entry.filename[0] == ' ') {
-            continue;
-        }
-
-        remove_until_char(entry.filename, ' ');
-        remove_until_char(entry.filename, '~');
-
-        // If not found, check if directory
-        if (it_is_a_directory(entry)) {
-            if (tree_not_cat) {
-                printf("%s├── [%.8s]\n", indent, entry.filename);
-            } else {
-                if (strcmp(entry.filename, filename_to_find) == 0) {
-                    return entry;
-                }
-            }
-
-            // Read Inside Directory
-            new_offset = get_first_cluster(bootSector) + (entry.startCluster - 2) * bootSector.sectors_per_cluster * bootSector.sector_size;
-            DirEntry foundEntry = fat16_recursion_tree(fd, bootSector, new_offset, depth + 1, tree_not_cat, filename_to_find);
-            remove_until_char(foundEntry.filename, ' ');
-            remove_until_char(foundEntry.filename, '~');
-
-            if (!tree_not_cat) {
-                if (entry.ext[0] == ' ' || entry.ext[0] == '8') {
-                    if (!strcmp(foundEntry.filename, filename_to_find)) {
-                        return foundEntry;
-                    }
-                } else {
-                    remove_until_char(foundEntry.ext, ' ');
-                    if (foundEntry.ext[0] == '\0') {
-                        snprintf(fullname, 14, "%.8s", foundEntry.filename);
-                    } else {
-                        snprintf(fullname, 14, "%.8s.%.3s", foundEntry.filename, foundEntry.ext);
-                    }
-                    if (!strcmp(fullname, filename_to_find)) {
-                        return foundEntry;
-                    }
-                }
-            }
+        
+        uint32_t first_sector_of_cluster = calculate_first_sector_of_cluster(entry, root_dir_sectors, bpb);
+        fat16_recursion_tree_helper(fd, bpb, first_sector_of_cluster, lvl + 1, is_last_entry, tree_not_cat, file_name);
+    } 
+    else if (entry.attributes == ATTR_ARCHIVE) 
+    {
+        if (tree_not_cat) {
+            print_directory_tree_entry(entry.filename, lvl, is_last_entry, prev_last_entry, 0);
         } else {
-            // It is a file
-            if (tree_not_cat) {
-                if (entry.ext[0] == ' ' || entry.ext[0] == '8') {
-                    printf("%s├── %.8s\n", indent, entry.filename);
-                } else {
-                    printf("%s├── %.8s.%s\n", indent, entry.filename, entry.ext);
-                }
-                continue;
-            } 
+            char filename_processed[20];
+            get_filename_processed(entry.filename, filename_processed, 0);
 
-            if (entry.ext[0] == ' ' || entry.ext[0] == '8') {
-                if (!strcmp(entry.filename, filename_to_find)) {
-                    return entry;
-                }
-            } else {
-                remove_until_char(entry.ext, ' ');
-                if (entry.ext[0] == '\0') {
-                        snprintf(fullname, 14, "%.8s", entry.filename);
-                    } else {
-                        snprintf(fullname, 14, "%.8s.%.3s", entry.filename, entry.ext);
-                    }
-                if (!strcmp(fullname, filename_to_find)) {
-                    return entry;
-                }
+            if (!strcmp(file_name, (char *)filename_processed)) {
+                print_directory_cat_entry(fd, entry, bpb);
+                return;
             }
         }
     }
+  }
+}
 
-    return entry;
+void get_filename_processed(unsigned char entry_filename[], char filename[], int is_directory)
+{
+    int cont = 0;
+    int processing_extension = 0;
+
+    if (is_directory) filename[cont++] = '[';
+
+    for (int i = 0; i < 11; i++) {
+        if (i == 0 && entry_filename[i] == KANJI_SPECIAL_CASE) {
+            filename[cont++] = (char)DIR_ENTRY_FREE;
+            continue;
+        }
+        if (entry_filename[i] == SPACE_PAD) continue;
+        if (entry_filename[i] == '~') break; 
+
+        // Agregar punto antes de la extensión
+        if (i == 8) {
+            if (processing_extension) break;
+            filename[cont++] = '.';
+            processing_extension = 1;
+        }
+        filename[cont++] = tolower(entry_filename[i]);
+    }
+    if (is_directory) filename[cont++] = ']';
+    filename[cont] = '\0';
+}
+
+void print_directory_tree_entry(unsigned char entry_filename[], int depth, int is_last_entry, int prev_last_entry, int is_directory)
+{
+    char filename[20]; // 8 + '.' + 3 + '\0'
+
+    get_filename_processed(entry_filename, filename, is_directory);
+
+    // Imprimir la indentación basada en la profundidad
+    for (int i = 0; i < depth; i++) {
+        printf(i == 0 && depth > 1 ? "│   " : (prev_last_entry ? "    " : "│   "));
+    }
+    
+    if (is_directory) {
+        printf(is_last_entry ? "└──" ANSI_COLOR_YELLOW "%s" ANSI_COLOR_RESET "\n" : "├──" ANSI_COLOR_YELLOW "%s" ANSI_COLOR_RESET "\n", filename);
+    } else {
+        printf(is_last_entry ? "└── %s\n" : "├── %s\n", filename);
+    }
+}
+
+void print_directory_cat_entry(int fd, DirEntry entry, BootSector bpb)
+{
+    int root_dir_sectors = (int)calculate_root_dir_sectors(bpb);
+    int first_sector_of_cluster = (int)calculate_first_sector_of_cluster(entry, root_dir_sectors, bpb);
+
+    int file_size = (int)entry.fileSize;
+    int bytes_read = 0;
+
+    while (bytes_read < file_size) {
+        int bytes_to_read = (int)bpb.sector_size;
+        bytes_to_read = bytes_read + bytes_to_read > file_size ? file_size - bytes_read : bytes_to_read;
+
+        char buffer[bytes_to_read];
+        lseek(fd, first_sector_of_cluster * bpb.sector_size, SEEK_SET);
+        read(fd, buffer, bytes_to_read);
+
+        printf("%.*s", bytes_to_read, buffer);
+
+        bytes_read += bytes_to_read;
+        first_sector_of_cluster++;
+    }
 }

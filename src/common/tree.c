@@ -16,8 +16,7 @@ void print_file_tree(int fd) {
     } else if (is_fat16(fd)) {
         BootSector bootSector;
         read_boot_sector(fd, &bootSector);
-        DirEntry entry = fat16_recursion_tree(fd, bootSector, get_root_dir_offset(bootSector), 0, 1, "");
-        printf("%s└── End of directory\n", entry.filename);
+        fat16_recursion_tree(fd, bootSector, 1, "");
     } else {
          printf("Unknown file system\n");
     }

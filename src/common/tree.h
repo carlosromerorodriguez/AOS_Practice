@@ -11,7 +11,7 @@
  * @return void
 */
 void print_file_tree(int fd);
-DirEntry fat16_recursion_tree(int fd, const BootSector bootSector, int offset, int depth, int tree_not_cat, char *filename_to_find);
+void fat16_recursion_tree(int fd, const BootSector bootSector, int tree_not_cat, char *filename_to_find);
 void process_dir_entry(const DirEntry *entry, int level);
 
 #endif // !_TREE_H

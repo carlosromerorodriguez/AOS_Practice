@@ -8,7 +8,37 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <sys/types.h>
+
+// Marcadores de inicio y final de nombre de archivo 
+#define DIR_ENTRY_FREE   0xE5
+#define DIR_ENTRY_EMPTY  0x00
+
+// Entrada de directorio actual
+#define CURRENT_DIR_ENTRY 0x2E
+
+// Caracteres especiales
+#define KANJI_SPECIAL_CASE 0x05
+
+// Espacio de relleno
+#define SPACE_PAD 0x20
+
+// Lista de caracteres prohibidos
+#define ILLEGAL_CHARS "\x22\x2A\x2B\x2C\x2E\x2F\x3A\x3B\x3C\x3D\x3E\x3F\x5B\x5C\x5D\x7C"
+
+// Atributos de archivo
+#define ATTR_READ_ONLY 0x01
+#define ATTR_HIDDEN 0x02
+#define ATTR_SYSTEM 0x04
+#define ATTR_VOLUME_ID 0x08
+#define ATTR_DIRECTORY 0x10
+#define ATTR_ARCHIVE 0x20
+
+// Colores
+#define ANSI_COLOR_YELLOW   "\x1b[33m"
+#define ANSI_COLOR_RESET    "\x1b[0m"
+
 
 // Estructura para el sector de arranque
 typedef struct {
@@ -19,13 +49,13 @@ typedef struct {
     uint16_t reserved_sectors;
     uint8_t number_of_fats;
     uint16_t root_dir_entries;
-    uint16_t total_sectors_short; // if zero, later field is used
+    uint16_t total_sectors_16;
     uint8_t media_descriptor;
-    uint16_t fat_size_sectors;
+    uint16_t fat_size_16;
     uint16_t sectors_per_track;
     uint16_t number_of_heads;
     uint32_t hidden_sectors;
-    uint32_t total_sectors_long;
+    uint32_t total_sectors_32;
 
     // Extended Boot Record fields
     uint8_t drive_number;
@@ -40,8 +70,7 @@ typedef struct {
 
 // Estructura para una entrada de directorio
 typedef struct {
-    char filename[8];
-    char ext[3];
+    unsigned char filename[11];
     char attributes;
     char reservedNT;
     char creationTimeTenth;
@@ -60,9 +89,9 @@ typedef struct {
  * 
  * @param fd File descriptor of the file system.
  * 
- * @return true if the file system is FAT16, false otherwise.
+ * @return 1 if the file system is FAT16, 0 otherwise.
 */
-bool is_fat16(int fd);
+int is_fat16(int fd);
 
 /**
  * Reads the boot sector of the file system. 
@@ -82,34 +111,5 @@ void read_boot_sector(int fd, BootSector *bootSector);
  * @return void
 */
 void print_boot_sector(const BootSector *bootSector);
-
-/**
- * Hets the root directory offset of the file system.
- * 
- * @param bootSector Boot sector of the file system.
- * 
- * @return the root directory offset of the file system.
-*/
-int get_root_dir_offset(BootSector bootSector);
-
-/**
- * Gets the first cluster of the file.
- * 
- * @param bootSector Boot sector of the file system.
- * 
- * @return the first cluster of the file.
-*/
-unsigned int get_first_cluster(const BootSector bootSector);
-
-/**
- * Gets the next cluster of the file. 
- * 
- * @param fd File descriptor of the file system.
- * @param current_cluster Current cluster of the file.
- * @param bootSector Boot sector of the file system.
- * 
- * @return the next cluster of the file.
-*/
-unsigned int get_next_cluster(int fd, unsigned int cluster, const BootSector bootSector);
 
 #endif // !_FAT16_READER_H

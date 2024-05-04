@@ -235,7 +235,7 @@ void dfs_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, int level,
                 uint32_t next_offset = offset + entry->rec_len;
                 uint32_t is_current_last_entry = (next_offset >= block_size) || (((Ext2DirectoryEntry *)((char *)entries + next_offset))->inode == 0);
 
-                if (strcmp(entry->name, ".") != 0 && strcmp(entry->name, "..") != 0 && strcmp(entry->name, "lost+found") != 0) {
+                if (entry->inode != current_inode && entry->inode != parent_inode && strcmp(entry->name, "lost+found") != 0) {
                     print_tree_line(level, entry->name, is_current_last_entry);
                 }
 

@@ -184,20 +184,35 @@ int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ex
     return 0;
 }
 
+
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_WHITE   "\x1b[37m"
+
 /*
     * @brief Prints a line of the tree representation of the directory structure.
     * @param level Level of the tree where the line will be printed.
     * @param name Name of the entry to print.
     * @param is_last_entry Flag indicating if the entry is the last one in the directory.
+    * @param is_directory Flag indicating if the entry is a directory.
  */
-void print_tree_line(int level, const char* name, int is_last_entry) {
+void print_tree_line(int level, const char* name, int is_last_entry, int is_directory) {
     static int levels[100] = {0}; // Array per rastrejar els nivells actius
     
     for (int i = 0; i < level; ++i) {
         printf("%s", levels[i] ? "│   " : "    ");
     }
 
-    printf("%s── %s\n", is_last_entry ? "└" : "├", name);
+    if (is_directory) {
+        printf("%s%s── %s%s\n", is_last_entry ? "└" : "├", ANSI_COLOR_BLUE, name, ANSI_COLOR_RESET);
+    } else {
+        printf("%s%s── %s%s\n", is_last_entry ? "└" : "├", ANSI_COLOR_WHITE, name, ANSI_COLOR_RESET);
+    }
 
     levels[level] = !is_last_entry; // Establim el nivell actual com a actiu o no
     
@@ -235,8 +250,8 @@ void dfs_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, int level,
                 uint32_t next_offset = offset + entry->rec_len;
                 uint32_t is_current_last_entry = (next_offset >= block_size) || (((Ext2DirectoryEntry *)((char *)entries + next_offset))->inode == 0);
 
-                if (strcmp(entry->name, ".") != 0 && strcmp(entry->name, "..") != 0 && strcmp(entry->name, "lost+found") != 0) {
-                    print_tree_line(level, entry->name, is_current_last_entry);
+                if (entry->inode != current_inode && entry->inode != parent_inode && strcmp(entry->name, "lost+found") != 0) {
+                    print_tree_line(level, entry->name, is_current_last_entry, entry->file_type == 2);
                 }
 
                 // Explorem recursivament si és un directori i no és '.' ni '..'

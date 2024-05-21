@@ -87,12 +87,10 @@ uint32_t calculate_first_data_sector(BootSector bpb, uint32_t root_dir_sectors)
     return calculate_first_root_dir_sector_number(bpb) + root_dir_sectors;
 }
 
-uint32_t calculate_first_sector_of_cluster(DirEntry entry, uint32_t root_dir_sectors, BootSector bs) 
+uint32_t calculate_first_sector_of_cluster(uint16_t cluster, BootSector bs) 
 {
-  uint16_t n = entry.startCluster;
-  uint32_t first_sector_of_cluster = (n - 2) * bs.sectors_per_cluster +  calculate_first_data_sector(bs, root_dir_sectors);;
-
-  return first_sector_of_cluster;
+    uint32_t first_sector_of_cluster = (cluster - 2) * bs.sectors_per_cluster + calculate_first_data_sector(bs, calculate_root_dir_sectors(bs));
+    return first_sector_of_cluster;
 }
 
 off_t calculate_dir_entry_offset(uint32_t current_sector, uint16_t idx, const BootSector bs) 
@@ -120,18 +118,19 @@ int is_last_active_entry(int fd, uint32_t current_sector, uint16_t idx, BootSect
     return 1; 
 }
 
-/**
- * Recursively reads the directory structure of the file system and prints it in a tree format.
- * 
- * @param fd File descriptor of the file system.
- * @param bootSector Boot sector of the file system.
- * @param offset Offset of the directory entry.
- * @param depth Depth of the directory.
- * @param tree_not_cat Flag to print the tree or to find a file.
- * @param filename_to_find Filename to find.
- * 
- * @return the directory entry of the file.
-*/
+uint16_t read_fat_entry(int fd, BootSector bpb, uint16_t cluster) 
+{
+    off_t fat_offset = bpb.reserved_sectors * bpb.sector_size + cluster * 2;
+    uint16_t next_cluster;
+
+    if (lseek(fd, fat_offset, SEEK_SET) == -1 || read(fd, &next_cluster, sizeof(uint16_t)) != sizeof(uint16_t)) {
+        perror("Error reading FAT entry");
+        exit(EXIT_FAILURE);
+    }
+
+    return next_cluster;
+}
+
 void fat16_recursion_tree(int fd, const BootSector bpb, int tree_not_cat, char *filename_to_find) 
 {
     int first_root_dir_sector_number = calculate_first_root_dir_sector_number(bpb);
@@ -144,8 +143,6 @@ void fat16_recursion_tree(int fd, const BootSector bpb, int tree_not_cat, char *
 
 void fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int lvl, int prev_last_entry, int tree_not_cat, char *file_name) 
 {
-  uint32_t root_dir_sectors = calculate_root_dir_sectors(bpb);
-
   for (size_t i = 0; i < (bpb.sector_size / sizeof(DirEntry)); i++) 
   {
     DirEntry entry;
@@ -166,8 +163,12 @@ void fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int
             print_directory_tree_entry(entry.filename, lvl, is_last_entry, prev_last_entry, 1);
         }
         
-        uint32_t first_sector_of_cluster = calculate_first_sector_of_cluster(entry, root_dir_sectors, bpb);
-        fat16_recursion_tree_helper(fd, bpb, first_sector_of_cluster, lvl + 1, is_last_entry, tree_not_cat, file_name);
+        uint16_t current_cluster = entry.startCluster;
+        while (current_cluster < 0xFFF8) { // 0xFFF8 is the end-of-cluster-chain marker for FAT16
+            uint32_t first_sector_of_cluster = calculate_first_sector_of_cluster(current_cluster, bpb);
+            fat16_recursion_tree_helper(fd, bpb, first_sector_of_cluster, lvl + 1, is_last_entry, tree_not_cat, file_name);
+            current_cluster = read_fat_entry(fd, bpb, current_cluster);
+        }
     } 
     else if (entry.attributes == ATTR_ARCHIVE) 
     {
@@ -233,23 +234,26 @@ void print_directory_tree_entry(unsigned char entry_filename[], int depth, int i
 
 void print_directory_cat_entry(int fd, DirEntry entry, BootSector bpb)
 {
-    int root_dir_sectors = (int)calculate_root_dir_sectors(bpb);
-    int first_sector_of_cluster = (int)calculate_first_sector_of_cluster(entry, root_dir_sectors, bpb);
-
-    int file_size = (int)entry.fileSize;
+    uint16_t current_cluster = entry.startCluster;
+    int file_size = entry.fileSize;
     int bytes_read = 0;
 
-    while (bytes_read < file_size) {
-        int bytes_to_read = (int)bpb.sector_size;
-        bytes_to_read = bytes_read + bytes_to_read > file_size ? file_size - bytes_read : bytes_to_read;
+    while (bytes_read < file_size && current_cluster < 0xFFF8) {
+        uint32_t first_sector_of_cluster = calculate_first_sector_of_cluster(current_cluster, bpb);
+        
+        for (int i = 0; i < bpb.sectors_per_cluster && bytes_read < file_size; i++) {
+            int bytes_to_read = bpb.sector_size;
+            bytes_to_read = bytes_read + bytes_to_read > file_size ? file_size - bytes_read : bytes_to_read;
 
-        char buffer[bytes_to_read];
-        lseek(fd, first_sector_of_cluster * bpb.sector_size, SEEK_SET);
-        read(fd, buffer, bytes_to_read);
+            char buffer[bytes_to_read];
+            lseek(fd, (first_sector_of_cluster + i) * bpb.sector_size, SEEK_SET);
+            read(fd, buffer, bytes_to_read);
 
-        printf("%.*s", bytes_to_read, buffer);
+            printf("%.*s", bytes_to_read, buffer);
 
-        bytes_read += bytes_to_read;
-        first_sector_of_cluster++;
+            bytes_read += bytes_to_read;
+        }
+
+        current_cluster = read_fat_entry(fd, bpb, current_cluster);
     }
 }

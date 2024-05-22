@@ -22,8 +22,9 @@ void cat_command(int fd, char* fileName) {
             close(fd);
             exit(-1);
         }
-        cat_ext2(fd, 2, &superblock, fileName, 2, 2);
-
+        if (!cat_ext2(fd, 2, &superblock, fileName, 2, 2)) {
+            printf("File not found.\n");
+        }
     } else if (is_fat16(fd)) {
         BootSector bootSector;
         read_boot_sector(fd, &bootSector);

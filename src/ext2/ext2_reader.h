@@ -171,7 +171,7 @@ int read_ext2_directory(int fd, Ext2Superblock *superblock, Ext2Inode *inode, Ex
     * @param superblock Superblock of the EXT2 file system.
     * @param filename Name of the file to display.
  */
-void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode);
+int cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode);
 
 
 /*

@@ -1,6 +1,6 @@
 #include "fat16_reader.h"
 
-void fat16_recursion_tree_helper(int fd, BootSector bs, int current_sector, int depth, int wasLast, int tree_not_cat, char *file_name);
+int fat16_recursion_tree_helper(int fd, BootSector bs, int current_sector, int depth, int wasLast, int tree_not_cat, char *file_name);
 void print_directory_tree_entry(unsigned char entry_filename[], int depth, int is_last_entry, int prev_last_entry, int is_directory);
 uint32_t calculate_root_dir_sectors(BootSector bpb);
 void get_filename_processed(unsigned char entry_filename[], char filename[], int is_directory);
@@ -137,11 +137,14 @@ void fat16_recursion_tree(int fd, const BootSector bpb, int tree_not_cat, char *
     uint32_t root_dir_sectors = calculate_root_dir_sectors(bpb);
     
     for (uint32_t i = 0; i < root_dir_sectors; i++) {
-        fat16_recursion_tree_helper(fd, bpb, first_root_dir_sector_number + i, 0, 0, tree_not_cat, filename_to_find);
+        if (fat16_recursion_tree_helper(fd, bpb, first_root_dir_sector_number + i, 0, 0, tree_not_cat, filename_to_find)) {
+            return;
+        }
     }
+    printf("File not found.\n");
 }
 
-void fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int lvl, int prev_last_entry, int tree_not_cat, char *file_name) 
+int fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int lvl, int prev_last_entry, int tree_not_cat, char *file_name) 
 {
   for (size_t i = 0; i < (bpb.sector_size / sizeof(DirEntry)); i++) 
   {
@@ -180,11 +183,12 @@ void fat16_recursion_tree_helper(int fd, BootSector bpb, int current_sector, int
 
             if (!strcmp(file_name, (char *)filename_processed)) {
                 print_directory_cat_entry(fd, entry, bpb);
-                return;
+                return 1;
             }
         }
     }
   }
+  return 0;
 }
 
 void get_filename_processed(unsigned char entry_filename[], char filename[], int is_directory)

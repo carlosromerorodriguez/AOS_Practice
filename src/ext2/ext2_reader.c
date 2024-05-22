@@ -310,7 +310,7 @@ void cat_ext2_file(int fd, Ext2Inode *inode, uint32_t block_size) {
     * @param superblock Superblock of the EXT2 file system.
     * @param filename Name of the file to display.
  */
-void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode) {
+int cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* filename, uint32_t current_inode, uint32_t parent_inode) {
     Ext2Inode inode; // Ínode actual en el que estem
     Ext2DirectoryEntry *entries; // Entrades del directori
     // Mida del bloc, shiftem 1024 a l'esquerra per obtenir la mida del bloc ja que el superblock ens dona la mida del bloc en potencies de 2
@@ -338,11 +338,14 @@ void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* file
                     Ext2Inode file_inode; // Inode del fitxer
                     read_ext2_inode(fd, superblock, entry->inode, &file_inode); // Llegim l'ínode del fitxer
                     cat_ext2_file(fd, &file_inode, block_size); // Mostrem el contingut del fitxer
+                    return 1;
                 }
 
                 // Explorem recursivament si és un directori i no és el directori actual ni el directori pare
                 if (entry->file_type == 2 && entry->inode != current_inode && entry->inode != parent_inode) {
-                    cat_ext2(fd, entry->inode, superblock, filename, entry->inode, current_inode);
+                    if (cat_ext2(fd, entry->inode, superblock, filename, entry->inode, current_inode)) {
+                        return 1;
+                    }
                 }
             }
             offset += entry->rec_len; // Ens movem a la següent entrada
@@ -350,4 +353,6 @@ void cat_ext2(int fd, uint32_t inode_num, Ext2Superblock *superblock, char* file
 
         free(entries); // Alliberem la memòria de les entrades
     }
+
+    return 0;
 }
